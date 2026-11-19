@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import maplibregl from 'maplibre-gl';
+import * as maplibregl from 'maplibre-gl';
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import type { Post } from '../lib/data';
 import { coarsePoint, countryAt, loadCountryShapes, type Country } from '../lib/geography';
 
@@ -12,6 +13,9 @@ type Props = {
   onSelectPost: (post: Post) => void;
   onSelectLocation: (location: MapLocation) => void;
 };
+
+// MapLibre 6 needs an explicit worker URL when bundled using Vite.
+maplibregl.setWorkerUrl(workerUrl);
 
 const mapStyle = 'https://tiles.openfreemap.org/styles/dark';
 
@@ -39,25 +43,22 @@ const GlobeMap = forwardRef<MapActions, Props>(function GlobeMap({ phase, posts,
   useEffect(() => {
     void loadCountryShapes();
     if (!containerRef.current) return;
-    if (!maplibregl.supported()) {
-      setError('Your browser needs WebGL to display the globe. Try Chrome with hardware acceleration enabled.');
-      return;
-    }
-    let map: maplibregl.Map;
-    try {
-      map = new maplibregl.Map({
-        container: containerRef.current,
-        style: mapStyle,
-        center: [-12, 21],
-        zoom: 1.42,
-        minZoom: 1.15,
-        maxZoom: 12,
-        attributionControl: false,
-        dragRotate: false,
-        pitchWithRotate: false,
-        renderWorldCopies: true,
-      });
-    } catch (cause) {
+let map: maplibregl.Map;
+
+try {
+  map = new maplibregl.Map({
+    container: containerRef.current,
+    style: mapStyle,
+    center: [-12, 21],
+    zoom: 1.42,
+    minZoom: 1.15,
+    maxZoom: 12,
+    attributionControl: false,
+    dragRotate: false,
+    pitchWithRotate: false,
+    renderWorldCopies: true,
+  });
+}catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The map could not start.');
       return;
     }
@@ -67,7 +68,7 @@ const GlobeMap = forwardRef<MapActions, Props>(function GlobeMap({ phase, posts,
       map.setProjection({ type: phaseRef.current === 'explore' ? 'mercator' : 'globe' });
     });
     map.on('load', () => setLoaded(true));
-    map.on('click', (event) => {
+    map.on('click', (event: maplibregl.MapMouseEvent) => {
       if (phaseRef.current !== 'explore') return;
       const point = coarsePoint(event.lngLat.lng, event.lngLat.lat);
       const country = countryAt(event.lngLat.lng, event.lngLat.lat);
@@ -89,7 +90,7 @@ const GlobeMap = forwardRef<MapActions, Props>(function GlobeMap({ phase, posts,
       const drift = () => {
         if (!mapRef.current || phaseRef.current !== 'intro') return;
         const center = map.getCenter();
-        map.easeTo({ center: [center.lng + 55, 21], duration: 26000, easing: (t) => t });
+        map.easeTo({ center: [center.lng + 55, 21], duration: 26000, easing: (t: number) => t });
       };
       map.on('moveend', drift);
       drift();
